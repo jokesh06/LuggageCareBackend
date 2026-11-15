@@ -1,0 +1,18 @@
+{
+    "command": "java -jar target/demo-0.0.1-SNAPSHOT.jar",
+    "buildPath": "C:/Users/ankes/Downloads/LuggageCare/appsail-java",
+	"stack": "java17",
+	"env_variables": {
+	"CORS_ALLOWED_ORIGINS": "http://localhost:3000,http://localhost:3001,http://localhost:5173,https://inventory-management-60094424307.development.catalystserverless.in",
+    "RESET_ADMIN_PASSWORD": "false",
+    "APP_ADMIN_USERNAME": "admin",
+    "APP_ADMIN_INITIAL_PASSWORD": "",
+    "JWT_SECRET": "c28AmOhSiZK4Jsa7tdHhM4rML90Qh72tMU+aRyq+jiPnJ+ZLHQpSYLTOmS8x3jcs",
+    "ZOHO_OAUTH_CLIENT_ID":"1000.1YAIPAYLI4EE4XNA9TS7QYKRL0386E",
+    "ZOHO_OAUTH_CLIENT_SECRET":"5d006ab2107cb651f26c7f6c696fc053d78a44c0f0",
+    "ZOHO_OAUTH_REFRESH_TOKEN":"1000.d1cb526083cbac571391a251b66f49d5.7ba32d9d52f809895b6c6e38205d5cf2"
+	},
+	"memory": 512,
+	"platform": "javase"
+}
+
