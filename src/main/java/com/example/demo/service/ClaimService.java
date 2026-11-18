@@ -1,15 +1,22 @@
 package com.example.demo.service;
 
 import com.example.demo.catalyst.CatalystContext;
+import com.example.demo.catalyst.CatalystDataStore;
 import com.example.demo.dto.ClaimRequest;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.zc.component.object.ZCObject;
 import com.zc.component.object.ZCRowObject;
 import com.zc.component.object.ZCTable;
 import com.zc.component.zcql.ZCQL;
 import org.springframework.stereotype.Service;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.LocalDate;
-
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
@@ -18,6 +25,16 @@ public class ClaimService {
 
     private static final String TABLE_NAME = "customerClaims";
     private static final String PRODUCT_TABLE = "customerProducts";
+            private final ObjectMapper objectMapper;
+                private final CatalystDataStore catalystDataStore;
+
+
+        public ClaimService(
+            ObjectMapper objectMapper, CatalystDataStore catalystDataStore) {
+
+        this.objectMapper = objectMapper;
+        this.catalystDataStore = catalystDataStore;
+    }
 
     private ZCTable getTable() throws Exception {
         return ZCObject.getInstance(CatalystContext.admin()).getTable(TABLE_NAME);
@@ -32,7 +49,10 @@ public class ClaimService {
         }
 
         // 1. Verify product exists and belongs to this customer
-        String productQuery = "SELECT * FROM " + PRODUCT_TABLE + " WHERE ROWID = " + request.getProductId();
+       // String productQuery = "SELECT * FROM " + PRODUCT_TABLE + " WHERE productId = " + request.getProductId();
+        String productQuery =
+        "SELECT * FROM " + PRODUCT_TABLE +
+        " WHERE productId = '" + escapeSql( request.getProductId()) + "'";
         List<ZCRowObject> productRows = ZCQL.getInstance(CatalystContext.admin()).executeQuery(productQuery);
 
         if (productRows == null || productRows.isEmpty()) {
@@ -67,6 +87,13 @@ public class ClaimService {
 
         // 4. Insert into Catalyst Data Store
         ZCRowObject savedRow = getTable().insertRow(row);
+        // 5. Push claim data to Zoho Creator
+    pushClaimToZohoCreator(
+            customerId,
+            request,
+            claimId,
+            isUnderWarranty
+    );
 
         return savedRow.getRowObject();
     }
@@ -85,5 +112,119 @@ public class ClaimService {
         } catch (Exception e) {
             return false;
         }
+        
     }
+    private String escapeSql(String value) {
+    return value.replace("'", "''");
+}
+
+
+private void pushClaimToZohoCreator(
+        Long customerId,
+        ClaimRequest request,
+        String claimId,
+        boolean isUnderWarranty) throws Exception {
+
+    String accessToken = catalystDataStore.accessToken();
+
+    ObjectNode claimData = objectMapper.createObjectNode();
+
+    // Claim ID from Catalyst
+    claimData.put("Catalyst_ID", customerId);
+
+    // Claim form name
+    claimData.put(
+            "luggage_service_request_name",
+            claimId
+    );
+
+    // Claim status
+    claimData.put(
+            "request_status",
+            "Claim submitted"
+    );
+    claimData.put(
+            "File_upload",
+            request.getMediaName() != null ? request.getMediaName() : ""
+    );
+
+    // Claim description
+    claimData.put(
+            "issue_description",
+            request.getDescription().trim()
+    );
+    claimData.put(
+            "City",
+            "Pune"
+    );  
+    // Issue category
+    claimData.put(
+            "issue_category",
+            request.getCategory().trim()
+    );
+
+    // Service method
+    claimData.put(
+            "service_method",
+            "Store drop-off"
+    );
+
+    // Submitted date
+    claimData.put(
+            "submitted_on",
+            LocalDate.now().format(
+                    DateTimeFormatter.ofPattern("dd-MMM-yyyy")
+            )
+    );
+
+    // Create API request body
+    ObjectNode requestBody = objectMapper.createObjectNode();
+    requestBody.set("data", claimData);
+
+    String creatorUrl =
+            "https://creator.zoho.in/api/v2/" +
+            "demo9fristinetech/" +
+            "luggage-care-operations-system/" +
+            "form/service";
+
+    HttpRequest httpRequest = HttpRequest.newBuilder()
+            .uri(URI.create(creatorUrl))
+            .header(
+                    "Authorization",
+                    "Zoho-oauthtoken " + accessToken
+            )
+            .header(
+                    "Content-Type",
+                    "application/json"
+            )
+            .POST(
+                    HttpRequest.BodyPublishers.ofString(
+                            requestBody.toString()
+                    )
+            )
+            .build();
+
+    HttpResponse<String> response =
+            HttpClient.newHttpClient().send(
+                    httpRequest,
+                    HttpResponse.BodyHandlers.ofString()
+            );
+
+    System.out.println("Creator Claim Request: "
+            + requestBody);
+
+    System.out.println("Creator Claim Response: "
+            + response.body());
+
+    if (response.statusCode() < 200 ||
+            response.statusCode() >= 300) {
+
+        throw new RuntimeException(
+                "Zoho Creator API failed. Status: "
+                + response.statusCode()
+                + ", Response: "
+                + response.body()
+        );
+    }
+}
 }

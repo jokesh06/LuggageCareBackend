@@ -7,7 +7,7 @@ import jakarta.validation.constraints.Size;
 public class ClaimRequest {
 
     @NotNull(message = "Product ID is required")
-    private Long productId;
+    private String productId;
 
     @NotBlank(message = "Issue category is required")
     private String category;
@@ -18,9 +18,12 @@ public class ClaimRequest {
 
     private String mediaName;
 
+    private String method;
+
+
     // Getters and Setters
-    public Long getProductId() { return productId; }
-    public void setProductId(Long productId) { this.productId = productId; }
+    public String getProductId() { return productId; }
+    public void setProductId(@NotNull(message = "Product ID is required") String productId) { this.productId = productId; }
 
     public String getCategory() { return category; }
     public void setCategory(String category) { this.category = category; }
@@ -30,4 +33,11 @@ public class ClaimRequest {
 
     public String getMediaName() { return mediaName; }
     public void setMediaName(String mediaName) { this.mediaName = mediaName; }
+    public String getMethod() {
+        return method;
+    }
+    public void setMethod(String method) {
+        this.method = method;
+    }
+    
 }

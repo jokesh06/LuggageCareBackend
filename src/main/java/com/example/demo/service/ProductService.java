@@ -39,6 +39,7 @@ public class ProductService {
             Long customerId,
             ProductRegistrationRequest request) throws Exception {
 
+
         validateRegistration(customerId, request);
 
         String serialNumber =
@@ -65,6 +66,8 @@ public class ProductService {
         row.set("serialNumber", serialNumber);
         row.set("purchaseDate", request.getPurchaseDate().toString());
         row.set("purchaseChannel", request.getPurchaseChannel().trim());
+        row.set("productId", request.getProductId().trim());
+
 
         row.set(
                 "registrationDate",
@@ -87,7 +90,7 @@ public class ProductService {
                     request.getVerificationRemarks().trim()
             );
         }
-
+    
         if (request.getInvoice() != null &&
                 !request.getInvoice().isBlank()) {
 
@@ -96,9 +99,17 @@ public class ProductService {
                     request.getInvoice().trim()
             );
         }
+
+         if (request.getModelNumber() != null &&
+                !request.getModelNumber().isBlank()) {
+
+            row.set("modelNumber", request.getModelNumber().trim());
+        }
+
         System.out.println("Inserting Product Row"+ row);
         // Insert product into Catalyst Data Store
         ZCRowObject savedRow = getTable().insertRow(row);
+
 
         return convertToProduct(savedRow);
     }
@@ -282,6 +293,8 @@ public class ProductService {
 
         product.setModifiedTime(
                 getString(row, "MODIFIEDTIME"));
+
+        product.setInvoice(getString(row,"invoice"));
 
         return product;
     }

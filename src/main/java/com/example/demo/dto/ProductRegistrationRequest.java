@@ -3,6 +3,8 @@ package com.example.demo.dto;
 
 import java.time.LocalDate;
 
+import com.fasterxml.jackson.databind.JsonNode;
+
 public class ProductRegistrationRequest {
 
     private String serialNumber;
@@ -11,10 +13,17 @@ public class ProductRegistrationRequest {
     private String modelNumber;
     private String verificationRemarks;
     private String invoice;
+    private String brand;
+    private String  coveragePeriod;
+    private String warantyStatus;
+    private String productId;
 
+    public void setBrand(String brand) {
+        this.brand = brand;
+    }
 
-    public String getInvoice() {
-        return invoice;
+    public String getBrand() {
+        return brand;
     }
 
     public ProductRegistrationRequest() {
@@ -63,4 +72,38 @@ public class ProductRegistrationRequest {
     public void setInvoice(String invoice) {
         this.invoice = invoice;
     }
+    public String getInvoice() {
+        return invoice;
+    }
+
+    public JsonNode isFeedbackGiven() {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'isFeedbackGiven'");
+    }
+
+    public String getCoveragePeriod() {
+        return coveragePeriod;
+    }
+
+    public void setCoveragePeriod(String coveragePeriod) {
+        this.coveragePeriod = coveragePeriod;
+    }
+
+    public String getWarantyStatus() {
+        return warantyStatus;
+    }
+
+    public void setWarantyStatus(String warantyStatus) {
+        this.warantyStatus = warantyStatus;
+    }
+
+    public String getProductId() {
+        return productId;
+    }
+
+    public void setProductId(String productId) {
+        this.productId = productId;
+    }
+
+    
 }
