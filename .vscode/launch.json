@@ -23,7 +23,11 @@
             "name": "DemoApplication",
             "request": "launch",
             "mainClass": "com.example.demo.DemoApplication",
-            "projectName": "demo"
+            "projectName": "demo",
+            "env": {
+                "NOTIFICATION_WEBHOOK_SECRET": "8ilvIheX84U3ICOZHAqWTSZTF/tfFT9jN8PC5Arijwg=",
+                "FIREBASE_SERVICE_ACCOUNT_PATH": "${workspaceFolder}/firebase-service-account.json"
+            }
         },
        
     ]
