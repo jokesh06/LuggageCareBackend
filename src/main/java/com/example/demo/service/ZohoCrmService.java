@@ -160,6 +160,65 @@ public class ZohoCrmService {
                 return products;
         }
 
+        /**
+         * Looks up a registered product in the Luggage_Registrations CRM module by productId.
+         * Returns the product, or null when no CRM record has that productId.
+         */
+        public Product findProductByProductId(String productId) throws Exception {
+                if (productId == null || productId.isBlank()) {
+                        return null;
+                }
+
+                String token = catalystDataStore.accessToken();
+
+                // CRM search criteria: escape ( ) , \ inside the value
+                String safeId = productId.trim()
+                                .replace("\\", "\\\\")
+                                .replace("(", "\\(")
+                                .replace(")", "\\)")
+                                .replace(",", "\\,");
+                String criteria = "(productId:equals:" + safeId + ")";
+
+                String url = crmApiUrl
+                                + "/crm/v8/" + REGISTRATION_MODULE + "/search"
+                                + "?fields=" + REGISTRATION_FIELDS
+                                + "&criteria=" + URLEncoder.encode(criteria, StandardCharsets.UTF_8);
+
+                HttpRequest request = HttpRequest.newBuilder()
+                                .uri(URI.create(url))
+                                .timeout(Duration.ofSeconds(30))
+                                .header("Authorization", "Zoho-oauthtoken " + token)
+                                .header("Accept", "application/json")
+                                .GET()
+                                .build();
+
+                HttpResponse<String> response = httpClient.send(
+                                request,
+                                HttpResponse.BodyHandlers.ofString());
+
+                System.out.println("CRM product search URL: " + url);
+                System.out.println("CRM product search Status: " + response.statusCode());
+                System.out.println("CRM product search Response: " + response.body());
+
+                // Zoho returns 204 No Content when nothing matches.
+                if (response.statusCode() == 204 || response.body() == null || response.body().isBlank()) {
+                        return null;
+                }
+
+                if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                        throw new RuntimeException(
+                                        "Zoho CRM product search failed. Status: "
+                                                        + response.statusCode()
+                                                        + ", Response: " + response.body());
+                }
+
+                JsonNode data = objectMapper.readTree(response.body()).path("data");
+                if (!data.isArray() || data.size() == 0) {
+                        return null;
+                }
+                return mapCrmRecordToProduct(data.get(0));
+        }
+
         private static String normalizeSerial(String serial) {
                 return serial == null || serial.isBlank() ? null : serial.trim().toUpperCase();
         }

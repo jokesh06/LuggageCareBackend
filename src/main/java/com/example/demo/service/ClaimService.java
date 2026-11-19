@@ -3,6 +3,7 @@ package com.example.demo.service;
 import com.example.demo.catalyst.CatalystContext;
 import com.example.demo.catalyst.CatalystDataStore;
 import com.example.demo.dto.ClaimRequest;
+import com.example.demo.dto.Product;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.zc.component.object.ZCObject;
@@ -18,6 +19,7 @@ import java.net.http.HttpResponse;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @Service
@@ -25,15 +27,18 @@ public class ClaimService {
 
     private static final String TABLE_NAME = "customerClaims";
     private static final String PRODUCT_TABLE = "customerProducts";
-            private final ObjectMapper objectMapper;
-                private final CatalystDataStore catalystDataStore;
+    private final ObjectMapper objectMapper;
+    private final CatalystDataStore catalystDataStore;
+    private final ZohoCrmService zohoCrmService;
 
-
-        public ClaimService(
-            ObjectMapper objectMapper, CatalystDataStore catalystDataStore) {
+    public ClaimService(
+            ObjectMapper objectMapper,
+            CatalystDataStore catalystDataStore,
+            ZohoCrmService zohoCrmService) {
 
         this.objectMapper = objectMapper;
         this.catalystDataStore = catalystDataStore;
+        this.zohoCrmService = zohoCrmService;
     }
 
     private ZCTable getTable() throws Exception {
@@ -48,28 +53,45 @@ public class ClaimService {
             throw new IllegalArgumentException("Invalid customer ID");
         }
 
-        // 1. Verify product exists and belongs to this customer
-       // String productQuery = "SELECT * FROM " + PRODUCT_TABLE + " WHERE productId = " + request.getProductId();
-        String productQuery =
-        "SELECT * FROM " + PRODUCT_TABLE +
-        " WHERE productId = '" + escapeSql( request.getProductId()) + "'";
-        List<ZCRowObject> productRows = ZCQL.getInstance(CatalystContext.admin()).executeQuery(productQuery);
+        // 1. Verify product exists
+        // --- OLD: validate productId from Catalyst Data Store ---
+        // String productQuery =
+        // "SELECT * FROM " + PRODUCT_TABLE +
+        // " WHERE productId = '" + escapeSql( request.getProductId()) + "'";
+        // List<ZCRowObject> productRows = ZCQL.getInstance(CatalystContext.admin()).executeQuery(productQuery);
+        //
+        // if (productRows == null || productRows.isEmpty()) {
+        //     throw new IllegalArgumentException("Selected product not found");
+        // }
+        //
+        // ZCRowObject productRow = productRows.get(0);
+        // Map<String, Object> productCols = productRow.getRowObject();
+        //
+        // // Extract purchase date to perform preliminary warranty check (Illustrative: 5 years validity)
+        // String purchaseDateStr = (String) productCols.get("purchaseDate");
+        // boolean isUnderWarranty = checkWarrantyValidity(purchaseDateStr);
 
-        if (productRows == null || productRows.isEmpty()) {
+        // --- NEW: validate productId from Zoho CRM (Luggage_Registrations module) ---
+        Product crmProduct = zohoCrmService.findProductByProductId(request.getProductId());
+        if (crmProduct == null) {
             throw new IllegalArgumentException("Selected product not found");
         }
 
-        ZCRowObject productRow = productRows.get(0);
-        Map<String, Object> productCols = productRow.getRowObject();
-        
         // Extract purchase date to perform preliminary warranty check (Illustrative: 5 years validity)
-        String purchaseDateStr = (String) productCols.get("purchaseDate");
+        String purchaseDateStr = crmProduct.getPurchaseDate() != null
+                ? crmProduct.getPurchaseDate().toString()
+                : null;
         boolean isUnderWarranty = checkWarrantyValidity(purchaseDateStr);
 
-        // 2. Generate human-friendly ticket ID (e.g., LC-260124)
-        String yearCode = String.valueOf(LocalDate.now().getYear()).substring(2);
-        String uniqueSuffix = String.format("%05d", (int)(Math.random() * 90000) + 10000);
-        String claimId = "LC-" + yearCode + uniqueSuffix;
+        // 2. Use the ticket ID sent by the app; otherwise generate one (e.g., LC-2612345)
+        String claimId = request.getClaimId();
+        if (claimId == null || claimId.isBlank()) {
+            String yearCode = String.valueOf(LocalDate.now().getYear()).substring(2);
+            String uniqueSuffix = String.format("%05d", (int)(Math.random() * 90000) + 10000);
+            claimId = "LC-" + yearCode + uniqueSuffix;
+        } else {
+            claimId = claimId.trim();
+        }
 
         // 3. Build Catalyst row object for insertion
         ZCRowObject row = ZCRowObject.getInstance();
@@ -78,8 +100,8 @@ public class ClaimService {
         row.set("productId", request.getProductId());
         row.set("category", request.getCategory().trim());
         row.set("description", request.getDescription().trim());
-        row.set("stage", 0L); // Stage 0: Claim submitted
-        row.set("method", "Store drop-off"); // Default initial selection
+        row.set("stage", request.resolveStage()); // Actual stage text from client, default "Claim submitted"
+        row.set("method", request.resolveMethod()); // Service method chosen in the app
         row.set("quote", isUnderWarranty ? 0L : 850L); // ₹0 if active warranty, ₹850 if expired demo fee
         row.set("approved", false);
         row.set("mediaName", request.getMediaName() != null ? request.getMediaName() : "");
@@ -106,13 +128,21 @@ public class ClaimService {
             return false;
         }
         try {
-            LocalDate purchased = LocalDate.parse(purchaseDateStr.substring(0, 10));
+            LocalDate purchased;
+            try {
+                // ISO format from Catalyst (yyyy-MM-dd...)
+                purchased = LocalDate.parse(purchaseDateStr.substring(0, 10));
+            } catch (Exception isoEx) {
+                // Zoho Creator date format (dd-MMM-yyyy, e.g. 19-Nov-2026)
+                purchased = LocalDate.parse(purchaseDateStr.trim().substring(0, 11),
+                        DateTimeFormatter.ofPattern("dd-MMM-yyyy", Locale.ENGLISH));
+            }
             LocalDate expiryDate = purchased.plusYears(5);
             return LocalDate.now().isBefore(expiryDate) || LocalDate.now().isEqual(expiryDate);
         } catch (Exception e) {
             return false;
         }
-        
+
     }
     private String escapeSql(String value) {
     return value.replace("'", "''");
@@ -141,7 +171,7 @@ private void pushClaimToZohoCreator(
     // Claim status
     claimData.put(
             "request_status",
-            "Claim submitted"
+            request.resolveStage()
     );
     claimData.put(
             "File_upload",
@@ -153,10 +183,11 @@ private void pushClaimToZohoCreator(
             "issue_description",
             request.getDescription().trim()
     );
+    // Service center selected in the app goes to the City field
     claimData.put(
             "City",
-            "Pune"
-    );  
+            request.resolveCenter()
+    );
     // Issue category
     claimData.put(
             "issue_category",
@@ -166,7 +197,7 @@ private void pushClaimToZohoCreator(
     // Service method
     claimData.put(
             "service_method",
-            "Store drop-off"
+            request.resolveMethod()
     );
 
     // Submitted date

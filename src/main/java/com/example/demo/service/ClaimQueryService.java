@@ -14,12 +14,15 @@ public class ClaimQueryService {
 
     private static final String TABLE_NAME = "customerClaims";
 
+    // Stage text that marks a claim as closed (stage is now stored as text, not 0-7)
+    public static final String CLOSED_STAGE = "Closed";
+
     // 1. Get Open Claims (Raw types avoid angle-bracket copy-paste errors)
     @SuppressWarnings("rawtypes")
     public List getOpenClaimsForCustomer(Long customerId) throws Exception {
         String zcql = "SELECT * FROM " + TABLE_NAME + 
                       " WHERE customerId = " + customerId + 
-                      " AND stage < 7 ORDER BY CREATEDTIME DESC";
+                      " AND stage != '" + CLOSED_STAGE + "' ORDER BY CREATEDTIME DESC";
         return executeZcqlQuery(zcql);
     }
 
@@ -28,7 +31,7 @@ public class ClaimQueryService {
     public List getClosedClaimsForCustomer(Long customerId) throws Exception {
         String zcql = "SELECT * FROM " + TABLE_NAME + 
                       " WHERE customerId = " + customerId + 
-                      " AND stage = 7 ORDER BY CREATEDTIME DESC";
+                      " AND stage = '" + CLOSED_STAGE + "' ORDER BY CREATEDTIME DESC";
         return executeZcqlQuery(zcql);
     }
 
